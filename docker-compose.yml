@@ -1,0 +1,124 @@
+version: '3'
+
+volumes:
+  db:
+  nextcloud:
+  letsencrypt:
+
+networks:
+  net:
+
+services:
+  db:
+    image: mariadb:10.5
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+    restart: always
+    volumes:
+      - db:/var/lib/mysql
+    environment:
+      - MARIADB_AUTO_UPGRADE=1
+      - MARIADB_DISABLE_UPGRADE_BACKUP=1
+    env_file:
+      - db.env
+    networks:
+      - net
+
+  redis:
+    image: redis:alpine
+    restart: always
+    networks:
+      - net
+
+  proxy:
+    container_name: proxy
+    image: harbor.cloud.infn.it/cache/library/traefik:${TRAEFIK_VERSION:-latest}
+    volumes:
+      - letsencrypt:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /opt/storageservice/traefik:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    command: /bin/sh -c "
+        while ! nc -z nextcloud 80 ; do sleep 1 ; done
+        && traefik
+        --log.level=DEBUG
+        --api.insecure=true
+        --providers.docker=true
+        --providers.docker.exposedbydefault=false
+        --providers.file.directory=/config
+        --providers.file.watch=true
+        --entrypoints.web.address=:80
+        --entrypoints.websecure.address=:443
+        --entrypoints.web.http.redirections.entryPoint.to=websecure
+        --certificatesresolvers.myhttpchallenge.acme.httpchallenge=true
+        --certificatesresolvers.myhttpchallenge.acme.httpchallenge.entrypoint=web
+        --certificatesresolvers.myhttpchallenge.acme.email=${CONTACT_EMAIL}
+        --certificatesresolvers.myhttpchallenge.acme.storage=/letsencrypt/acme.json
+        --certificatesresolvers.myhttpchallenge.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory
+      "
+    networks:
+      - net
+
+  nextcloud:
+    image: nextcloud:apache
+    restart: always
+    volumes:
+      - ./wait-for-it.sh:/wait-for-it.sh
+      - ./oidc.auth.php:/oidc.auth.php
+      - ./entrypoint.sh:/entrypoint.sh
+      - nextcloud:/var/www/html
+    extra_hosts:
+      - "${IAM_HOST}:${IAM_IP}"
+    environment:
+      - MYSQL_HOST=db
+      - REDIS_HOST=redis
+      - IAM_HOST=${IAM_HOST}
+      - USER_PASS=${USER_PASS}
+      - USER_NAME=${USER_NAME}
+      - USER_DISPLAY_NAME=${USER_DISPLAY_NAME}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET}
+      - OBJECTSTORE_S3_HOST=${S3_HOST}
+      - OBJECTSTORE_S3_BUCKET=${S3_BUCKET}
+      - OBJECTSTORE_S3_KEY=${S3_KEY}
+      - OBJECTSTORE_S3_SECRET=${S3_SECRET}
+      - OBJECTSTORE_S3_PORT=${S3_PORT}
+      - OBJECTSTORE_S3_SSL=${S3_SSL}
+      - OBJECTSTORE_S3_USEPATH_STYLE=true
+      - OBJECTSTORE_S3_REGION=:default-placement
+      - NEXTCLOUD_ADMIN_USER=${ADMIN_USER}
+      - NEXTCLOUD_ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - NEXTCLOUD_TRUSTED_DOMAINS=${NEXTCLOUD_HOST}
+    env_file:
+      - db.env
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.middlewares.nextcloud-redirect-ssl.redirectscheme.scheme=https"
+      - "traefik.http.routers.nextcloud-nossl.middlewares=nextcloud-redirect-ssl"
+      - "traefik.http.routers.nextcloud-nossl.rule=Host(`${NEXTCLOUD_HOST}`)"
+      - "traefik.http.routers.nextcloud-nossl.entrypoints=web"
+      - "traefik.http.routers.nextcloud.rule=Host(`${NEXTCLOUD_HOST}`)"
+      - "traefik.http.routers.nextcloud.entrypoints=websecure"
+      - "traefik.http.routers.nextcloud.tls.certresolver=myhttpchallenge"
+      - "traefik.http.routers.nextcloud.tls=true"
+      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+    networks:
+      - net
+    depends_on:
+      - db
+      - redis
+
+  cron:
+    image: nextcloud:apache
+    restart: always
+    volumes:
+      - nextcloud:/var/www/html
+    entrypoint: /cron.sh
+    depends_on:
+      - db
+      - redis
+    networks:
+      - net
