@@ -15,11 +15,15 @@ services:
     restart: always
     volumes:
       - db:/var/lib/mysql
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
     environment:
       - MARIADB_AUTO_UPGRADE=1
       - MARIADB_DISABLE_UPGRADE_BACKUP=1
-    env_file:
-      - db.env
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
     networks:
       - net
 
@@ -63,13 +67,12 @@ services:
       - net
 
   nextcloud:
-    image: nextcloud:apache
+    image: ffornari/nextcloud:25.0.2-apache
     restart: always
     volumes:
-      - ./wait-for-it.sh:/wait-for-it.sh
-      - ./oidc.auth.php:/oidc.auth.php
-      - ./entrypoint.sh:/entrypoint.sh
       - nextcloud:/var/www/html
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
     extra_hosts:
       - "${IAM_HOST}:${IAM_IP}"
       - "${S3_HOST}:${S3_IP}"
@@ -93,8 +96,10 @@ services:
       - NEXTCLOUD_ADMIN_USER=${ADMIN_USER}
       - NEXTCLOUD_ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - NEXTCLOUD_TRUSTED_DOMAINS=${NEXTCLOUD_HOST}
-    env_file:
-      - db.env
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
     labels:
       - "traefik.enable=true"
       - "traefik.http.middlewares.nextcloud-redirect-ssl.redirectscheme.scheme=https"
@@ -113,10 +118,12 @@ services:
       - redis
 
   cron:
-    image: nextcloud:apache
+    image: nextcloud:25.0.2-apache
     restart: always
     volumes:
       - nextcloud:/var/www/html
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
     entrypoint: /cron.sh
     depends_on:
       - db
