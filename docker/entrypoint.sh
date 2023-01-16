@@ -265,6 +265,10 @@ do
   filename="${f##*/}"
   cp $f /usr/local/share/ca-certificates/"${filename%.*}.crt"
 done
+wget "https://letsencrypt.org/certs/staging/letsencrypt-stg-int-r3.pem" -O /usr/local/share/ca-certificates/letsencrypt-stg-int-r3.crt
+wget "https://letsencrypt.org/certs/staging/letsencrypt-stg-int-e1.pem" -O /usr/local/share/ca-certificates/letsencrypt-stg-int-e1.crt
+wget "https://letsencrypt.org/certs/staging/letsencrypt-stg-root-x1.pem" -O /usr/local/share/ca-certificates/letsencrypt-stg-root-x1.crt
+wget "https://letsencrypt.org/certs/staging/letsencrypt-stg-root-x2.pem" -O /usr/local/share/ca-certificates/letsencrypt-stg-root-x2.crt
 update-ca-certificates
 
 curl -L https://github.com/pulsejet/nextcloud-oidc-login/releases/download/v2.4.0/oidc_login.tar.gz -o oidc_login.tar.gz
