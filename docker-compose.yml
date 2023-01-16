@@ -72,6 +72,7 @@ services:
       - nextcloud:/var/www/html
     extra_hosts:
       - "${IAM_HOST}:${IAM_IP}"
+      - "${S3_HOST}:${S3_IP}"
     environment:
       - MYSQL_HOST=db
       - REDIS_HOST=redis
