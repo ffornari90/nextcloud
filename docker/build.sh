@@ -1,1 +1,1 @@
-docker build -t ffornari/nextcloud:25.0.2-apache .
+docker build -t ffornari/nextcloud:stable-apache .
